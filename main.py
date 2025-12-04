@@ -64,7 +64,6 @@ llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0.7,
     api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_BASE_URI"),
 )
 
 memory = ConversationSummaryBufferMemory(
