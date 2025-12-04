@@ -5,10 +5,9 @@ from typing import List, Dict, Any
 from pathlib import Path
 import csv
 import os
-import json
 import requests
 
-# ====================== FastAPI App ======================
+# FastAPI App
 app = FastAPI(root_path="/api/v1")
 
 app.add_middleware(
@@ -19,18 +18,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ====================== In-memory storage ======================
+# Storage
 data: List[Dict[str, Any]] = []  # Храним сообщения + reasoning
 
-# ====================== CSV Loading ======================
+# CSV Loading
 MOVIES_DB: Dict[str, Dict] = {}
 
 
 def load_local_movies() -> None:
     csv_path = Path("data/movies.csv")
     if not csv_path.exists():
-        print(f"CSV НЕ НАЙДЕН: {csv_path.resolve()}")
-        print("Текущая директория:", os.getcwd())
+        print(f"CSV NOT FOUND: {csv_path.resolve()}")
         return
 
     try:
@@ -42,15 +40,15 @@ def load_local_movies() -> None:
                 if title:
                     MOVIES_DB[title.lower()] = row
                     loaded += 1
-            print(f"УСПЕШНО загружено {loaded} фильмов из movies.csv")
+            print(f"Successully loaded {loaded} movies from movies.csv")
     except Exception as e:
-        print(f"ОШИБКА загрузки CSV: {e}")
+        print(f"Error loading CSV: {e}")
 
 
-load_local_movies()  # Вызываем при старте
+load_local_movies()
 
 
-# ====================== LangChain Setup ======================
+# LangChain Setup
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationSummaryBufferMemory
@@ -63,7 +61,7 @@ load_dotenv()
 OMDB_URI = f"http://www.omdbapi.com/?apikey={os.getenv('OMDB_API_KEY')}"
 
 llm = ChatOpenAI(
-    model="gpt-4.1-nano",
+    model="gpt-4o-mini",
     temperature=0.7,
     api_key=os.getenv("OPENAI_API_KEY"),
     base_url=os.getenv("OPENAI_BASE_URI"),
@@ -81,10 +79,47 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             """
-Ты — эксперт по кино. Используй инструменты только когда это действительно нужно.
-Отвечай на русском языке, дружелюбно и с энтузиазмом.
-Всегда заканчивай ответ словом "Wow".
-""",
+            Ты — CinemaBot, дружелюбный и увлечённый эксперт по кино. 
+            Ты всегда отвечаешь на русском языке, с энтузиазмом, используешь эмодзи.
+
+            ### Доступные инструменты:
+            У тебя есть 3 инструмента. Используй их ТОЛЬКО когда запрос пользователя явно соответствует их назначению:
+
+            1. search_movie — когда пользователь спрашивает про конкретный фильм:
+            • «Расскажи про Титаник», «Что за фильм Матрица?», «Кто режиссёр Интpip freeze > requirements.txt
+ерстеллара?», «Какой рейтинг у Начала?» → используй search_movie
+
+            2. compare_two_movies — когда пользователь сравнивает два фильма:
+            • «Интерстеллар или Начало?», «Что лучше: Дюна или Оппенгеймер?», «Сравни Бойцовский клуб и Матрицу» → используй compare_two_movies
+
+            3. get_movies_by_genre — когда пользователь хочет рекомендации по жанру:
+            • «Посоветуй комедию», «Лучшие боевики», «Что посмотреть из фантастики», «Топ-5 драм», «Хороший триллер» → используй get_movies_by_genre
+
+            Если запрос не попадает под эти случаи — отвечай сам, без инструментов.
+
+            ### Работа с памятью:
+            Ты помнишь весь предыдущий диалог. Ссылайся на него, если пользователь упоминает прошлые фильмы или предпочтения.
+            Пример: пользователь сказал «Люблю Нолана» → потом «Что ещё посмотреть?» → предложи другой фильм Нолана.
+
+            ### Примеры (few-shot):
+
+            Пользователь: Привет!
+            Ты: Привет! Я CinemaBot — твой личный гид по миру кино. Спрашивай что угодно: фильмы, жанры, сравнения — я всё знаю! 
+
+            Пользователь: Расскажи про фильм "Оппенгеймер"
+            Ты: (вызываешь search_movie) → Оппенгеймер (2023) — биографическая драма от Кристофера Нолана... 
+
+            Пользователь: А что лучше — Оппенгеймер или Дюна?
+            Ты: (вызываешь compare_two_movies) → Давай сравним! Оппенгеймер: 8.6/10... Дюна: 8.3/10... Победитель — Оппенгеймер! 
+
+            Пользователь: Посоветуй комедию
+            Ты: (вызываешь get_movies_by_genre) → Вот топ комедий из тысячи лучших: 1. The Intouchables... 
+
+            Пользователь: Спасибо! А что-то лёгкое на вечер?
+            Ты: (без инструмента, с памятью) Конечно! Ты любишь комедии — попробуй «1+1» (The Intouchables) или «Похмельные игры» — лёгкие и очень смешные! 
+
+            Всегда будь позитивным, используй эмодзи!
+            """,
         ),
         MessagesPlaceholder(variable_name="history"),
         ("human", "{input}"),
@@ -93,10 +128,16 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 
-# ====================== Tools ======================
+# Tools
 @tool
 def search_movie(query: str) -> Dict[str, Any]:
-    """Ищет фильм по названию (на английском) в локальной базе или OMDB."""
+    """Используй, когда пользователь:
+    • спрашивает про конкретный фильм по названию
+    • хочет узнать информацию о фильме (год, режиссёр, рейтинг, актёры, сюжет и т.д.)
+    • говорит «что за фильм», «расскажи про», «покажи», «найди фильм», «информация о фильме», «кто снимался в», «кто режиссёр», «какой рейтинг у» и т.п.
+    Название фильма нужно искать на английском языке (например, «Титаник» → «Titanic»).
+    """
+
     q = query.strip().lower()
 
     # Локальная база
@@ -132,12 +173,18 @@ def search_movie(query: str) -> Dict[str, Any]:
     except:
         pass
 
-    return {"error": "Фильм не найден"}
+    return {"error": "Movie not found"}
 
 
 @tool
 def compare_two_movies(movie1: str, movie2: str) -> str:
-    """Сравнивает два фильма по рейтингу, году, режиссёру и т.д."""
+    """Используй, когда пользователь:
+    • просит сравнить два фильма
+    • спрашивает «что лучше», «какой круче», «сравни», «можешь сравнить», «versus», «против», «чем отличается», «какой выше рейтинг», «кто выиграет» и т.п.
+    • явно упоминает два названия фильмов в одном запросе с намёком на сравнение
+    Примеры: «Интерстеллар или Начало?», «что лучше: Матрица или Бойцовский клуб?», «сравни Оппенгеймер и Дюну».
+    """
+
     m1 = search_movie.invoke({"query": movie1})
     m2 = search_movie.invoke({"query": movie2})
 
@@ -151,21 +198,28 @@ def compare_two_movies(movie1: str, movie2: str) -> str:
     )
 
     return f"""
-СРАВНЕНИЕ ФИЛЬМОВ
+    СРАВНЕНИЕ ФИЛЬМОВ
 
-1. {m1['title']} ({m1['year']})
-   → IMDb: {m1['rating']} | Режиссёр: {m1['director']}
+    1. {m1['title']} ({m1['year']})
+    → IMDb: {m1['rating']} | Режиссёр: {m1['director']}
 
-2. {m2['title']} ({m2['year']})
-   → IMDb: {m2['rating']} | Режиссёр: {m2['director']}
+    2. {m2['title']} ({m2['year']})
+    → IMDb: {m2['rating']} | Режиссёр: {m2['director']}
 
-Победитель по рейтингу: {winner}
-""".strip()
+    Победитель по рейтингу: {winner}
+    """.strip()
 
 
 @tool
 def get_movies_by_genre(genre: str) -> str:
-    """Рекомендует топ-10 фильмов по жанру (на английском: Action, Comedy, Drama и т.д.)"""
+    """Используй, когда пользователь:
+    • просит посоветовать или порекомендовать фильмы определённого жанра
+    • спрашивает «лучшие комедии», «топ боевиков», «что посмотреть из фантастики», «хорошие драмы», «фильмы ужасов», «посоветуй триллер», «дай комедию» и т.п.
+    • говорит «хочу что-то из [жанр]», «ищу фильм жанра [жанр]», «рекомендации по жанру», «Можешь порекомендовать по жанру [жанр]»
+    Жанр нужно понимать на русском и английском (комедия/Comedy, боевик/Action, драма/Drama, фантастика/Sci-Fi и т.д.).
+    Если количество не указано — возвращай топ-10. Если указано — старайся выполнить (например, «покажи 5 комедий»).
+    """
+
     genre_norm = genre.strip().lower()
     matches = []
 
@@ -196,7 +250,7 @@ def get_movies_by_genre(genre: str) -> str:
 tools = [search_movie, compare_two_movies, get_movies_by_genre]
 
 
-# ====================== Routes ======================
+# Routes
 class MessageRequest(BaseModel):
     title: str
 
@@ -218,13 +272,10 @@ async def create_message(request: Request):
     if not user_input:
         return {"error": "Пустое сообщение"}, 400
 
-    # Добавляем сообщение пользователя
     data.append({"title": user_input, "role": "user"})
 
-    # История диалога
     history = memory.load_memory_variables({})["history"]
 
-    # Создаём агента
     agent = create_openai_functions_agent(llm=llm, tools=tools, prompt=prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
@@ -237,14 +288,12 @@ async def create_message(request: Request):
         ):
             kind = event["event"]
 
-            # Мысли
             if kind == "on_chain_stream" and event.get("name") == "Agent":
                 chunk = event["data"].get("chunk", {})
                 thought = chunk.get("thought")
                 if thought:
                     reasoning_steps.append({"type": "thought", "content": thought})
 
-            # Вызов инструмента
             if kind == "on_tool_start":
                 reasoning_steps.append(
                     {
@@ -254,14 +303,12 @@ async def create_message(request: Request):
                     }
                 )
 
-            # Результат инструмента
             if kind == "on_tool_end":
                 result = event["data"]["output"]
                 reasoning_steps.append(
                     {"type": "observation", "content": str(result)[:1000]}
                 )
 
-            # Финальный ответ
             if kind == "on_chain_end" and event.get("name") == "AgentExecutor":
                 output = event["data"].get("output", {})
                 final_answer = (
@@ -270,10 +317,8 @@ async def create_message(request: Request):
                     else str(output)
                 )
 
-        # Сохраняем в память
         memory.save_context({"input": user_input}, {"output": final_answer})
 
-        # Добавляем ответ ассистента с reasoning
         assistant_msg = {
             "title": final_answer or "Я не смог ответить...",
             "role": "assistant",
