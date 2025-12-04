@@ -1,10 +1,18 @@
 Чат-бот на базе **GPT-4o-mini + LangChain + FastAPI + Next.js**
 
+Реализован **Вариант 1**
+
 **Tools:**
 
-- search_movie
+- search_movie (Kaggle датасет + IMDB)
 - compare_two_movies
 - get_movies_by_genre
+
+
+**Пример использования**
+https://www.loom.com/share/f78187e3ba9347b1bc98a716e95e2bce
+
+
 
 ## Как запустить проект локально
 
@@ -38,7 +46,7 @@ OMDB_API_KEY=ваш_ключ_с_omdbapi.com
 
 ```bash
 python -m venv venv
-source venv/bin/activate # Windows: venv\Scripts\activate
+source venv/bin/activate      # Windows: venv\Scripts\activate
 
 # Устанавливаем зависимости
 pip install -r requirements.txt
@@ -58,6 +66,8 @@ cd frontend
 ```
 
 # Устанавливаем зависимости
+
+**Node.js >= 20.x
 
 ```bash
 npm install
