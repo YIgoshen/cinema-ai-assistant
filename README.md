@@ -1,3 +1,11 @@
+Чат-бот на базе **GPT-4o-mini + LangChain + FastAPI + Next.js**
+
+**Tools:**
+
+- search_movie
+- compare_two_movies
+- get_movies_by_genre
+
 ## Как запустить проект локально
 
 ### 1. Открыть данную папку или склонировать репозиторией.

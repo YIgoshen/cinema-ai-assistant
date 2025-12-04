@@ -139,7 +139,7 @@ def search_movie(query: str) -> Dict[str, Any]:
 
     q = query.strip().lower()
 
-    # Локальная база
+    # Локальная база (CSV)
     for movie in MOVIES_DB.values():
         if q in movie["Series_Title"].lower():
             return {
